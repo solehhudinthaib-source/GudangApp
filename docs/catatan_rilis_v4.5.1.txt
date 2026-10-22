@@ -1,0 +1,42 @@
+GUDANGAPP VERSI 4.5.1 - PERBAIKAN PESAN ERROR SURAT JALAN (FRONTEND SAJA)
+==========================================================================
+Tanggal pembuatan : 8 Oktober 2026
+
+>>> FOLDER INI = FRONTEND TERBARU (4.5.1).
+>>> BACKEND TIDAK BERUBAH: tetap Code_v4.5.gs di folder GudangApp_v4.5. TIDAK PERLU deploy ulang backend.
+
+ISI FOLDER
+----------
+GudangApp_frontend_v4.5.1.html   Tempel isinya ke Google Sites (Embed) menggantikan frontend v4.5.
+README_Keterangan.txt            Berkas ini.
+
+Alamat API (const API) di berkas ini SAMA dengan frontend v4.5 (berawalan GANTI_DENGAN_ID_DEPLOYMENT).
+Bila Anda sudah mengganti alamat API di frontend Anda sendiri, salin alamat itu ke berkas ini
+sebelum menempelnya.
+
+MASALAH YANG DIPERBAIKI
+-----------------------
+Pada v4.5, klik "Cetak Surat Jalan" bisa tampak "tidak terjadi apa-apa". Penyebabnya: bila
+pembuatan PDF gagal SETELAH server berhasil menyimpan surat jalan, layar tidak memberi penjelasan
+yang jelas dan dialog tetap terbuka. Pesan kecil (toast) hanya tampil 3 detik dan mudah terlewat.
+
+PERUBAHAN DI 4.5.1
+------------------
+- Pesan hasil (berhasil / gagal) tampil sebagai SPANDUK di atas layar yang bertahan sampai Anda
+  menutupnya (tombol x), di halaman mana pun. Pesan yang sama juga tampil di dalam dialog.
+- Bila PDF gagal dibuat, pesannya menyebut penyebab (mis. pustaka PDF belum termuat) dan
+  mengingatkan bahwa surat jalan SUDAH tersimpan; cetak ulang dari tabel Riwayat Surat Jalan.
+- Bila berhasil, spanduk memuat tautan "Buka PDF di tab baru" sebagai cadangan jika unduhan
+  otomatis diblokir browser (sering terjadi pada halaman yang di-embed di Google Sites).
+- Galat dari server (mis. izin Apps Script) ditampilkan apa adanya, bukan lagi dibaca sebagai
+  "gagal terhubung".
+
+SETELAH MEMASANG, JIKA SURAT JALAN SUDAH SEMPAT DIBUAT
+------------------------------------------------------
+Percobaan klik sebelumnya mungkin sudah menyimpan surat jalan di server (misalnya
+API/SJ/001/08/10/2026). Buka menu Surat Jalan, lihat tabel "Riwayat Surat Jalan", lalu klik
+"Cetak" pada baris itu untuk mengunduh PDF-nya. Barang yang sudah masuk surat jalan memang tidak
+muncul lagi pada daftar pilihan, dan mencoba membuatnya lagi akan ditolak server.
+
+Bila baris itu ternyata tidak ada di Riwayat, buka sheet "SuratJalan" pada spreadsheet dan lihat
+apakah ada baris datanya. Laporkan apa yang tampil pada spanduk setelah klik Cetak.

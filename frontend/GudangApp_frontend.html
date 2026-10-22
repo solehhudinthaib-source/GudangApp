@@ -549,6 +549,7 @@ input::placeholder{color:var(--text3)}
     <!-- SURAT JALAN -->
     <div class="page no-print" id="page-suratjalan">
       <div class="gudang-info" id="gi-suratjalan"></div>
+      <div id="sj-pesan" style="display:none;margin-bottom:14px;padding:12px 16px;border-radius:10px;font-size:13px;line-height:1.5"></div>
       <div class="card">
         <div class="card-title">Buat Surat Jalan <span style="font-size:12px;color:var(--text3);font-weight:400">pilih barang keluar yang dikirim bersamaan</span></div>
         <div class="form-row">
@@ -896,6 +897,7 @@ input::placeholder{color:var(--text3)}
 <div class="toast" id="toast"></div>
 
 <script>
+// GudangApp frontend v4.5.1 (pesan error surat jalan lebih jelas, tautan cadangan PDF)
 const API = 'https://script.google.com/macros/s/GANTI_DENGAN_ID_DEPLOYMENT/exec';
 
 let produk = [];
@@ -1524,18 +1526,57 @@ async function kirimSuratJalan(ids, tujuan, project){
   });
   try{
     const res = await apiCall({action:'createSuratJalan', data:JSON.stringify({ids, tujuan, project, ket, gudang:activeGudang})});
-    if(!res || !res.success){ showToast((res&&(res.error||res.message))||'Gagal membuat surat jalan','err'); return null; }
+    if(!res || !res.success){
+      const pesan = (res&&(res.error||res.message))||'Gagal membuat surat jalan';
+      sjTampilPesan('Surat jalan belum dibuat: '+pesan, 'err');
+      return null;
+    }
+    // Server sudah menyimpan surat jalan: perbarui tampilan DULU, baru buat PDF.
     sjList.unshift(res.suratJalan);
     ids.forEach(id => { delete sjKet[id]; });
     sjAntrian[activeGudang] = sjAntrian[activeGudang].filter(id => ids.indexOf(id)<0);
     sjUpdateBar();
     sjMuatStatus();
-    cetakSuratJalan(res.suratJalan);
-    showToast('Surat jalan '+res.suratJalan.nomor+' dibuat ✓');
+    cetakDanLaporkan(res.suratJalan);
     return res.suratJalan;
   }catch(e){
-    if(String(e&&e.message)!=='unauthorized' && String(e&&e.message)!=='forbidden') showToast('Gagal terhubung ke server','err');
+    const m = String(e&&e.message);
+    if(m==='unauthorized' || m==='forbidden') return null;
+    if(m==='Timeout' || m==='Error') sjTampilPesan('Gagal terhubung ke server. Periksa koneksi lalu coba lagi.', 'err');
+    else sjTampilPesan('Terjadi kesalahan: '+m, 'err');
     return null;
+  }
+}
+
+// Pesan yang TIDAK hilang sendiri (toast hanya 3 detik): tampil di dialog dan di halaman Surat Jalan.
+function sjTampilPesan(teks, jenis, linkPdf){
+  showToast(teks, jenis==='err' ? 'err' : 'ok');
+  const warna = jenis==='err' ? 'var(--red)' : 'var(--green)';
+  const isi = escHtml(teks) + (linkPdf ? ' <a href="'+escAttr(linkPdf)+'" target="_blank" rel="noopener" style="color:inherit;font-weight:600;text-decoration:underline">Buka PDF di tab baru</a>' : '');
+  const m = document.getElementById('sjm-info');
+  if(m){ m.innerHTML = isi; m.style.color = warna; }
+  // spanduk di atas layar: bertahan sampai ditutup, tampil di halaman mana pun
+  let b = document.getElementById('sj-banner');
+  if(!b){
+    b = document.createElement('div');
+    b.id = 'sj-banner';
+    b.className = 'no-print';
+    b.style.cssText = 'position:fixed;top:14px;left:50%;transform:translateX(-50%);max-width:720px;width:calc(100% - 32px);z-index:1000;padding:14px 18px;border-radius:12px;font-size:14px;line-height:1.5;display:flex;gap:14px;align-items:flex-start;box-shadow:0 8px 28px rgba(0,0,0,.2);border:1px solid var(--border)';
+    document.body.appendChild(b);
+  }
+  b.style.display = 'flex';
+  b.style.background = jenis==='err' ? 'var(--red-bg)' : 'var(--green-bg)';
+  b.style.color = warna;
+  b.innerHTML = '<div style="flex:1">'+isi+'</div><button onclick="document.getElementById(\'sj-banner\').style.display=\'none\'" style="border:none;background:transparent;color:inherit;font-size:22px;line-height:1;cursor:pointer" aria-label="Tutup pesan">×</button>';
+}
+
+// Buat PDF dan laporkan hasilnya dengan jelas (gagal PDF tidak membuat surat jalan "hilang").
+function cetakDanLaporkan(sj){
+  try{
+    const url = cetakSuratJalan(sj);
+    sjTampilPesan('Surat jalan '+sj.nomor+' dibuat. Jika unduhan tidak muncul, buka PDF-nya dari tautan ini.', 'ok', url);
+  }catch(e){
+    sjTampilPesan('Surat jalan '+sj.nomor+' SUDAH tersimpan, tetapi PDF gagal dibuat: '+(e&&e.message ? e.message : e)+'. Cetak ulang dari tabel Riwayat Surat Jalan.', 'err');
   }
 }
 
@@ -1576,7 +1617,7 @@ function renderSjRiwayat(){
 
 function cetakUlangSj(nomor){
   const s = sjList.find(x => x.nomor===nomor);
-  if(s) cetakSuratJalan(s);
+  if(s) cetakDanLaporkan(s);
 }
 
 // ---- Setelah Simpan Barang Keluar: tawarkan cetak surat jalan ----
@@ -1618,9 +1659,11 @@ async function sjModalCetak(){
   const ids = sjAntrian[activeGudang].slice();
   if(!ids.length){ sjModalTutup(); return; }
   const tujuan = document.getElementById('sjm-tujuan').value.trim();
-  if(!tujuan){ showToast('Isi tujuan / penerima','warn'); return; }
+  if(!tujuan){ sjTampilPesan('Isi tujuan / penerima terlebih dahulu.', 'err'); return; }
   const project = document.getElementById('sjm-project').value.trim();
   const btn = document.getElementById('sjm-cetak');
+  document.getElementById('sjm-info').textContent = 'Menghubungi server, mohon tunggu...';
+  document.getElementById('sjm-info').style.color = 'var(--text3)';
   btn.disabled = true; btn.textContent = 'Membuat...';
   const sj = await kirimSuratJalan(ids, tujuan, project);
   btn.disabled = false; btn.innerHTML = '⎙ Cetak Surat Jalan';
@@ -1633,9 +1676,12 @@ async function sjModalCetak(){
 }
 
 
+// Mengembalikan alamat blob PDF (untuk tautan cadangan bila unduhan diblokir browser).
 function cetakSuratJalan(sj){
+  if(!window.jspdf || !window.jspdf.jsPDF) throw new Error('pustaka PDF (jsPDF) belum termuat; periksa koneksi internet lalu muat ulang halaman');
   const {jsPDF} = window.jspdf;
   const doc = new jsPDF({ orientation:'portrait', unit:'mm', format:'a4' });
+  if(typeof doc.autoTable !== 'function') throw new Error('pustaka tabel PDF (autoTable) belum termuat; periksa koneksi internet lalu muat ulang halaman');
   const W = 210, M = 14, G = SJ_GESER_ATAS;
 
   // Garis atas (tanpa kop: bagian atas dibiarkan kosong untuk logo / kertas kop)
@@ -1700,6 +1746,7 @@ function cetakSuratJalan(sj){
   doc.text('Dicetak oleh '+pencetak+' pada '+new Date().toLocaleString('id-ID'), M, 290);
 
   doc.save('Surat_Jalan_'+sj.nomor.replace(/\//g,'-')+'.pdf');
+  try { return doc.output('bloburl'); } catch(e) { return ''; }
 }
 
 // ---- STOK ----
