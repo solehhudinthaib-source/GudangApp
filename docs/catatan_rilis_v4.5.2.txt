@@ -1,0 +1,46 @@
+GUDANGAPP VERSI 4.5.2 - FRONTEND (SURAT JALAN + PERBAIKAN UNGGAH EXCEL)
+=========================================================================
+Tanggal pembuatan : 8 Oktober 2026
+
+>>> FOLDER INI = FRONTEND TERBARU (4.5.2). Menggantikan 4.5.1 dan 4.5.
+>>> BACKEND TIDAK BERUBAH: tetap Code_v4.5.gs di folder GudangApp_v4.5. TIDAK PERLU deploy ulang backend.
+
+ISI FOLDER
+----------
+GudangApp_frontend_v4.5.2.html   Tempel isinya ke Google Sites (Embed) menggantikan frontend sebelumnya.
+README_Keterangan.txt            Berkas ini.
+
+Alamat API (const API) SAMA dengan frontend v4.5 (berawalan GANTI_DENGAN_ID_DEPLOYMENT). Bila Anda sudah
+mengganti alamat API di frontend Anda sendiri, salin alamat itu ke berkas ini sebelum menempelnya.
+
+RIWAYAT VERSI FRONTEND
+----------------------
+4.4    "GudangApp_frontend (4).html" di Downloads. Tanpa surat jalan.
+4.5    Fitur Surat Jalan (folder GudangApp_v4.5).
+4.5.1  Pesan hasil/gagal surat jalan lebih jelas (spanduk) + tautan cadangan PDF (folder GudangApp_v4.5.1).
+4.5.2  4.5.1 + perbaikan kotak unggah Excel (folder ini).
+
+YANG DIPERBAIKI DI 4.5.2
+------------------------
+Masalah: pada tab "Upload Excel" di Barang Masuk dan Barang Keluar, mengklik atau menyeret berkas
+Excel ke kotak unggah tidak berefek apa pun.
+Penyebab: kotak unggah memakai <input type="file"> yang disembunyikan (CSS display:none) dan tidak
+punya penangan klik maupun seret-lepas. Masalah ini sudah ada sejak versi 4.4, bukan dari fitur
+Surat Jalan. Pada halaman "Upload Excel" tombol "Pilih File" berfungsi, tetapi seret-lepas juga tidak.
+Perbaikan: semua kotak unggah (Barang Masuk, Barang Keluar, Upload Excel, Return) sekarang
+- bisa diklik untuk membuka pemilih berkas,
+- bisa diseret-lepas (kotak berwarna biru saat berkas diseret),
+- menolak berkas selain .xlsx, .xls, .csv dengan pesan jelas.
+Pratinjau, tombol "Import ke Sheets", dan logika impor tidak diubah.
+
+CATATAN IMPOR BARANG KELUAR
+---------------------------
+Barang keluar yang masuk lewat Upload Excel tidak memunculkan dialog Cetak Surat Jalan. Barang itu
+muncul di daftar menu Surat Jalan, dan surat jalannya dibuat dari sana (centang barang, lalu
+Buat dan Cetak).
+
+PENGUJIAN
+---------
+Diuji di browser komputer pembuat kode dengan berkas Excel yang dibuat saat uji: seret-lepas
+menampilkan pratinjau, berkas non-Excel ditolak, klik membuka pemilih berkas. BELUM diuji di Google
+Sites Anda. Setelah memasang, coba seret satu berkas Excel ke tab Upload Excel di Barang Keluar.

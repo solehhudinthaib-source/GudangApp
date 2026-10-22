@@ -897,7 +897,7 @@ input::placeholder{color:var(--text3)}
 <div class="toast" id="toast"></div>
 
 <script>
-// GudangApp frontend v4.5.1 (pesan error surat jalan lebih jelas, tautan cadangan PDF)
+// GudangApp frontend v4.5.2 (pesan error surat jalan lebih jelas, tautan cadangan PDF, kotak unggah Excel bisa diklik dan diseret)
 const API = 'https://script.google.com/macros/s/GANTI_DENGAN_ID_DEPLOYMENT/exec';
 
 let produk = [];
@@ -1748,6 +1748,52 @@ function cetakSuratJalan(sj){
   doc.save('Surat_Jalan_'+sj.nomor.replace(/\//g,'-')+'.pdf');
   try { return doc.output('bloburl'); } catch(e) { return ''; }
 }
+
+// ================= PERBAIKAN KOTAK UNGGAH EXCEL (v4.5.2) =================
+// Kotak unggah (tab Upload Excel di Barang Masuk/Keluar, halaman Upload Excel, dan Return) memakai
+// <input type="file"> yang disembunyikan CSS dan tidak punya penangan klik/seret, sehingga mengklik
+// atau menyeret berkas tidak berefek. Fungsi ini memasang keduanya pada semua kotak unggah.
+function pasangZonaUpload(){
+  document.querySelectorAll('.upload-zone').forEach(zone => {
+    if(zone.dataset.siap) return;
+    const input = zone.querySelector('input[type=file]');
+    if(!input) return;
+    zone.dataset.siap = '1';
+    zone.style.cursor = 'pointer';
+    zone.addEventListener('click', e => {
+      if(e.target.closest('button') || e.target === input) return;   // tombol "Pilih File" sudah punya penangan sendiri
+      input.click();
+    });
+    ['dragenter','dragover'].forEach(ev => zone.addEventListener(ev, e => {
+      e.preventDefault();
+      zone.style.borderColor = 'var(--blue)'; zone.style.background = 'var(--blue-bg)';
+    }));
+    zone.addEventListener('dragleave', e => {
+      e.preventDefault();
+      zone.style.borderColor = ''; zone.style.background = '';
+    });
+    zone.addEventListener('drop', e => {
+      e.preventDefault();
+      zone.style.borderColor = ''; zone.style.background = '';
+      const f = e.dataTransfer && e.dataTransfer.files && e.dataTransfer.files[0];
+      if(!f) return;
+      if(!/\.(xlsx|xls|csv)$/i.test(f.name)){ showToast('Format berkas harus .xlsx, .xls, atau .csv','warn'); return; }
+      try{ const dt = new DataTransfer(); dt.items.add(f); input.files = dt.files; }catch(err){}
+      if(input.files && input.files.length){
+        input.dispatchEvent(new Event('change', {bubbles:true}));      // menjalankan readFile() milik input
+      } else {                                                          // cadangan bila browser menolak mengisi input.files
+        const m = /readFile\(this,\s*'(\w+)'\)/.exec(input.getAttribute('onchange') || '');
+        if(m){
+          const el = document.getElementById('fname-' + m[1]);
+          if(el) el.textContent = '📄 ' + f.name;
+          parseExcel(f, m[1]);
+        }
+      }
+    });
+  });
+}
+pasangZonaUpload();
+
 
 // ---- STOK ----
 async function tambahProduk(){
