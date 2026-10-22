@@ -1,5 +1,5 @@
 // =============================================
-// GudangApp — Google Apps Script Backend v4.4
+// GudangApp — Google Apps Script Backend v4.5
 // Multi-Gudang: Shell & Office
 // + Sistem Login & Role (Super Admin, Supervisor, Petugas, Finance)
 // v4.1: return rusak kini mengurangi stok; update stok dipusatkan di updateStok()
@@ -7,6 +7,9 @@
 // v4.3: aksi getAll (semua data Shell & Office dalam satu permintaan)
 // v4.4: role Super Admin + Kelola User (getUsers, saveUser, hapusUser) khusus Super Admin;
 //       role dicek ulang ke sheet Users di setiap permintaan
+// v4.5: Surat Jalan keluar (createSuratJalan, getSuratJalan) dengan nomor otomatis
+//       API/SJ/<urut>/<dd>/<MM>/<yyyy>; disimpan pada sheet 'SuratJalan'
+//       getTertunda: hitungan barang keluar yang belum punya surat jalan (peringatan keras)
 // =============================================
 
 // Ganti string ini dengan teks rahasia bebas milik Anda sendiri
@@ -67,7 +70,7 @@ function handleAction(params) {
     }
 
     // ---- Role "finance" hanya boleh membaca data ----
-    const writeActions = ['saveProduk', 'editProduk', 'hapusProduk', 'addTransaksi', 'addReturn'];
+    const writeActions = ['saveProduk', 'editProduk', 'hapusProduk', 'addTransaksi', 'addReturn', 'createSuratJalan'];
     if (writeActions.indexOf(action) !== -1 && user.role === 'finance') {
       return { error: 'forbidden', message: 'Akun Finance hanya memiliki akses lihat (read-only).' };
     }
@@ -81,6 +84,9 @@ function handleAction(params) {
     if (action === 'addTransaksi')     return addTransaksi(JSON.parse(params.data), gudang);
     if (action === 'getReturn')        return getReturn(gudang);
     if (action === 'addReturn')        return addReturn(JSON.parse(params.data), gudang);
+    if (action === 'getSuratJalan')    return getSuratJalan(gudang);
+    if (action === 'getTertunda')      return getTertunda();
+    if (action === 'createSuratJalan') return createSuratJalan(JSON.parse(params.data), user, gudang);
     return { error: 'Action tidak dikenal: ' + action };
   } catch(err) {
     return { error: err.toString() };
@@ -318,6 +324,8 @@ function getSheet(name) {
       sheet.appendRow(['ID','Tanggal','Jam','Nama','Kode','Qty','Satuan','Supplier','Faktur','Keterangan']);
     } else if (name === 'Users') {
       sheet.appendRow(['Username','PasswordHash','Role','Nama']);
+    } else if (name === 'SuratJalan') {
+      sheet.appendRow(['NoSuratJalan','Tanggal','Jam','Gudang','Tujuan','DibuatOleh','ItemJSON','Project']);
     }
   }
   return sheet;
@@ -527,3 +535,135 @@ function addReturn(ret, gudang) {
   return { success: true };
 }
 
+// ================= SURAT JALAN KELUAR (v4.5) =================
+// Satu surat jalan memuat beberapa transaksi barang keluar (cetak gabungan).
+// Nomor otomatis: API/SJ/<urut 3 digit>/<dd>/<MM>/<yyyy>.
+// Urutan berlanjut (tidak di-reset) dan tidak membedakan gudang.
+// Isi surat jalan diambil dari sheet Transaksi (bukan dari kiriman browser),
+// dan satu transaksi hanya boleh masuk ke satu surat jalan.
+// d: { ids: [id transaksi keluar], tujuan, project, ket: {id: keterangan}, gudang }
+function createSuratJalan(d, user, gudang) {
+  const g = d.gudang || gudang;
+  if (g !== 'Shell' && g !== 'Office') return { success: false, error: 'Gudang tidak dikenal' };
+  const ids = (d.ids || []).map(function(x) { return String(x); });
+  if (!ids.length) return { success: false, error: 'Pilih minimal satu barang keluar' };
+  if (ids.length > 100) return { success: false, error: 'Maksimal 100 item per surat jalan' };
+  const tujuan = String(d.tujuan || '').trim();
+  if (!tujuan) return { success: false, error: 'Tujuan / penerima wajib diisi' };
+  const project = String(d.project || '').trim().slice(0, 100); // contoh: "Shell Veteran" (opsional)
+  const ketMap = d.ket || {};
+
+  const lock = LockService.getScriptLock();
+  lock.waitLock(20000); // cegah dua pengguna mendapat nomor yang sama
+  try {
+    const sj = getSheet('SuratJalan');
+    const sjData = sj.getDataRange().getValues();
+    const dipakai = {};
+    let maxSeq = 0;
+    for (let i = 1; i < sjData.length; i++) {
+      const seq = parseInt(String(sjData[i][0]).split('/')[2], 10);
+      if (seq > maxSeq) maxSeq = seq;
+      if (String(sjData[i][3]) === g) {
+        let lama = [];
+        try { lama = JSON.parse(sjData[i][6] || '[]'); } catch (e) {}
+        lama.forEach(function(it) { dipakai[String(it.id)] = String(sjData[i][0]); });
+      }
+    }
+
+    const trData = getSheet('Transaksi_' + g).getDataRange().getValues();
+    const byId = {};
+    for (let i = 1; i < trData.length; i++) byId[String(trData[i][0])] = trData[i];
+
+    const items = [];
+    for (let k = 0; k < ids.length; k++) {
+      const r = byId[ids[k]];
+      if (!r || String(r[3]) !== 'keluar') {
+        return { success: false, error: 'Transaksi ' + ids[k] + ' tidak ditemukan atau bukan barang keluar' };
+      }
+      if (dipakai[ids[k]]) {
+        return { success: false, error: 'Transaksi "' + r[4] + '" sudah ada di surat jalan ' + dipakai[ids[k]] };
+      }
+      items.push({
+        id: ids[k], tanggal: normalizeDate(r[1]), nama: String(r[4]), kode: String(r[5]),
+        qty: Number(r[6]), satuan: String(r[7]), ref: String(r[8]),
+        ket: String(ketMap[ids[k]] || '').trim().slice(0, 100)
+      });
+    }
+
+    const tz = 'Asia/Jakarta';
+    const now = new Date();
+    let urut = String(maxSeq + 1);
+    while (urut.length < 3) urut = '0' + urut;
+    const nomor = 'API/SJ/' + urut + '/' + Utilities.formatDate(now, tz, 'dd/MM/yyyy');
+    const tanggal = Utilities.formatDate(now, tz, 'yyyy-MM-dd');
+    const jam = Utilities.formatDate(now, tz, 'HH.mm');
+
+    const baris = sj.getLastRow() + 1;
+    const rng = sj.getRange(baris, 1, 1, 8);
+    rng.setNumberFormat('@'); // simpan sebagai teks agar tanggal/jam tidak diubah Sheets
+    rng.setValues([[nomor, tanggal, jam, g, tujuan, user.nama, JSON.stringify(items), project]]);
+
+    return { success: true, suratJalan: {
+      nomor: nomor, tanggal: tanggal, jam: jam, gudang: g, tujuan: tujuan, project: project,
+      dibuatOleh: user.nama, items: items
+    } };
+  } finally {
+    lock.releaseLock();
+  }
+}
+
+// Riwayat surat jalan satu gudang (terbaru di atas, maks. 200)
+function getSuratJalan(gudang) {
+  const data = getSheet('SuratJalan').getDataRange().getValues();
+  const out = [];
+  for (let i = data.length - 1; i >= 1 && out.length < 200; i--) {
+    if (String(data[i][3]) !== gudang) continue;
+    let items = [];
+    try { items = JSON.parse(data[i][6] || '[]'); } catch (e) {}
+    out.push({
+      nomor: String(data[i][0]), tanggal: normalizeDate(data[i][1]), jam: String(data[i][2]),
+      gudang: String(data[i][3]), tujuan: String(data[i][4]), project: String(data[i][7] || ''),
+      dibuatOleh: String(data[i][5]), items: items
+    });
+  }
+  return { success: true, data: out };
+}
+
+// Peringatan keras: barang keluar yang belum masuk ke surat jalan manapun.
+// Aturan berlaku mulai tanggal surat jalan PERTAMA yang pernah dibuat (otomatis);
+// barang keluar sebelum tanggal itu dikecualikan. Tidak ada yang diblokir:
+// hasil ini hanya dipakai aplikasi untuk menampilkan peringatan.
+// "terlambat" = barang keluar dari hari sebelum hari ini yang masih belum bersurat jalan.
+function getTertunda() {
+  const kosong = { total: 0, terlambat: 0, terlama: '' };
+  const sjData = getSheet('SuratJalan').getDataRange().getValues();
+  const hariIni = Utilities.formatDate(new Date(), 'Asia/Jakarta', 'yyyy-MM-dd');
+  let mulai = '';
+  const dipakai = { Shell: {}, Office: {} };
+  for (let i = 1; i < sjData.length; i++) {
+    const tgl = normalizeDate(sjData[i][1]);
+    if (tgl && (!mulai || tgl < mulai)) mulai = tgl;
+    const g = String(sjData[i][3]);
+    if (!dipakai[g]) continue;
+    let items = [];
+    try { items = JSON.parse(sjData[i][6] || '[]'); } catch (e) {}
+    items.forEach(function(it) { dipakai[g][String(it.id)] = true; });
+  }
+  const hasil = { success: true, mulai: mulai, hariIni: hariIni, Shell: kosong, Office: kosong };
+  if (!mulai) return hasil; // belum ada surat jalan: aturan belum berlaku
+  ['Shell', 'Office'].forEach(function(g) {
+    const tr = getSheet('Transaksi_' + g).getDataRange().getValues();
+    const r = { total: 0, terlambat: 0, terlama: '' };
+    for (let i = 1; i < tr.length; i++) {
+      if (String(tr[i][3]) !== 'keluar') continue;
+      const tgl = normalizeDate(tr[i][1]);
+      if (!tgl || tgl < mulai) continue;
+      if (dipakai[g][String(tr[i][0])]) continue;
+      r.total++;
+      if (tgl < hariIni) r.terlambat++;
+      if (!r.terlama || tgl < r.terlama) r.terlama = tgl;
+    }
+    hasil[g] = r;
+  });
+  return hasil;
+}

@@ -1,0 +1,69 @@
+GUDANGAPP VERSI 4.5 - FITUR SURAT JALAN KELUAR
+===============================================
+Tanggal pembuatan : 8 Oktober 2026
+
+>>> FOLDER INI = KODE APLIKASI VERSI TERBARU (4.5).
+>>> Versi sebelumnya (4.4) adalah berkas "Code (3).gs" dan "GudangApp_frontend (4).html"
+    di folder Downloads. Berkas itu tidak diubah.
+
+ISI FOLDER
+----------
+Code_v4.5.gs                    Backend (Google Apps Script). Ganti isi Code.gs dengan berkas ini.
+GudangApp_frontend_v4.5.html    Frontend (Google Sites, Embed). Tempel isinya seperti sebelumnya.
+README_Keterangan.txt           Berkas ini.
+
+URL API dan kunci rahasia (SECRET) di kedua berkas SAMA dengan versi 4.4.
+
+CARA MEMASANG
+-------------
+1. Buka project Apps Script. Ganti seluruh isi Code.gs dengan isi Code_v4.5.gs. Simpan.
+2. Deploy > Manage deployments > ikon pensil pada deployment yang dipakai > Version: New version
+   > Deploy. (Deployment terikat versi: tanpa langkah ini aplikasi masih memakai kode lama.)
+   Google dapat meminta persetujuan izin ulang; setujui.
+3. Buka halaman Google Sites > edit > Embed > tempel isi GudangApp_frontend_v4.5.html > Publish.
+Sheet baru "SuratJalan" dibuat otomatis saat pertama kali dipakai.
+
+CATATAN: surat jalan PERTAMA yang dibuat menentukan tanggal mulai berlakunya peringatan. Buat surat
+jalan pertama pada hari Anda benar-benar mulai memakai fitur ini, bukan saat uji coba.
+
+APA YANG BARU DI 4.5
+--------------------
+- Menu Surat Jalan: pilih barang keluar, buat dan cetak satu surat jalan untuk beberapa barang
+  (cetak gabungan), riwayat, dan cetak ulang.
+- Setelah menyimpan barang keluar muncul dialog "Cetak Surat Jalan?". Tombol "Tambah barang lain /
+  nanti" membiarkan barang menunggu agar bisa digabung dengan barang berikutnya.
+- Nomor otomatis: API/SJ/<urut 3 digit>/<dd>/<MM>/<yyyy>, contoh API/SJ/001/08/10/2026.
+  Urutan berlanjut, tidak dibedakan per gudang.
+- Isi surat jalan: Kepada/Tujuan, Project/Maintenance, Hari/Tanggal, Jam, tabel barang
+  (No, Kode, Nama Barang, Jumlah, Satuan, Keterangan), tanda tangan Petugas Gudang, Mengetahui,
+  Diterima.
+- Peringatan keras barang keluar tanpa surat jalan: lencana pada menu Surat Jalan, spanduk di
+  Dashboard dan Barang Keluar, baris "Terlambat" (merah) bila dari hari sebelumnya. TIDAK memblokir
+  penyimpanan barang keluar. Berlaku sejak tanggal surat jalan pertama.
+- Hak akses: Super Admin, Supervisor, Petugas dapat membuat surat jalan. Finance tidak (hanya lihat).
+
+PENGATURAN YANG BISA DIUBAH
+---------------------------
+- SJ_GESER_ATAS (di GudangApp_frontend_v4.5.html): 0 = garis di paling atas halaman. Isi sekitar 30
+  bila surat jalan dicetak di kertas kop surat.
+
+SKENARIO UJI YANG DISARANKAN (isi hasilnya setelah dicoba di aplikasi yang sudah dipasang)
+------------------------------------------------------------------------------------------
+ 1. Simpan satu barang keluar -> dialog Cetak Surat Jalan muncul.
+ 2. Klik Cetak dengan tujuan terisi -> PDF terunduh, nomor berformat API/SJ/001/dd/MM/yyyy.
+ 3. Simpan dua barang keluar berturut-turut dengan "Tambah barang lain" -> dicetak sebagai satu
+    surat jalan berisi dua barang.
+ 4. Tutup dialog dengan "Tambah barang lain / nanti" -> spanduk kuning muncul; barang tetap ada di
+    daftar menu Surat Jalan.
+ 5. Barang yang sudah bersurat jalan tidak muncul lagi di daftar pilihan menu Surat Jalan.
+ 6. Cetak ulang dari Riwayat -> nomor sama dengan sebelumnya.
+ 7. Masuk sebagai Finance -> menu Surat Jalan tidak tampil.
+ 8. Simpan barang keluar tanpa mencetak, lalu cek hari berikutnya -> lencana merah dan baris "Terlambat".
+ 9. Ganti gudang Shell/Office -> riwayat dan peringatan mengikuti gudang.
+10. Dua pengguna membuat surat jalan hampir bersamaan -> nomor tidak kembar.
+
+PENGUJIAN OTOMATIS YANG SUDAH DILAKUKAN PENULIS KODE
+----------------------------------------------------
+Logika backend (nomor urut, validasi, penolakan Finance, riwayat per gudang, perhitungan
+peringatan) diuji dengan lingkungan Apps Script tiruan: 20 dari 20 uji lulus. Alur layar diuji di
+browser dengan data tiruan. Ini BUKAN pengganti uji pada aplikasi yang sudah dipasang (skenario di atas).

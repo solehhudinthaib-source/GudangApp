@@ -321,6 +321,9 @@ input::placeholder{color:var(--text3)}
     <div class="nav-item" data-page="keluar" onclick="goPage('keluar',this)">
       <span class="nav-ico">↑</span>Barang Keluar
     </div>
+    <div class="nav-item" data-page="suratjalan" onclick="goPage('suratjalan',this)">
+      <span class="nav-ico">⎙</span>Surat Jalan<span id="sj-badge" style="display:none;margin-left:auto;color:#fff;background:var(--red);border-radius:10px;font-size:10px;font-weight:600;padding:1px 7px"></span>
+    </div>
     <div class="nav-item" data-page="stok" onclick="goPage('stok',this)">
       <span class="nav-ico">≡</span>Stok Opname
     </div>
@@ -375,6 +378,7 @@ input::placeholder{color:var(--text3)}
     <!-- DASHBOARD -->
     <div class="page active" id="page-dashboard">
       <div id="sync-info" class="sync-bar" style="display:none">⟳ Memuat data dari Google Sheets...</div>
+      <div id="sj-warn-dash" class="no-print" style="display:none;margin-bottom:12px;padding:10px 14px;border-radius:8px;font-size:13px;align-items:center;justify-content:space-between;gap:10px;flex-wrap:wrap"></div>
       <div class="metrics">
         <div class="metric"><div class="metric-label">Total Produk</div><div class="metric-val mv-blue" id="m-total">—</div><div class="metric-sub">terdaftar</div></div>
         <div class="metric"><div class="metric-label">Masuk Hari Ini</div><div class="metric-val mv-green" id="m-masuk">—</div><div class="metric-sub">unit diterima</div></div>
@@ -473,6 +477,8 @@ input::placeholder{color:var(--text3)}
     <!-- BARANG KELUAR -->
     <div class="page" id="page-keluar">
       <div class="gudang-info" id="gi-keluar"></div>
+      <div id="sj-warn-keluar" class="no-print" style="display:none;margin-bottom:12px;padding:10px 14px;border-radius:8px;font-size:13px;align-items:center;justify-content:space-between;gap:10px;flex-wrap:wrap"></div>
+      <div id="sj-antrian-bar" class="no-print" style="display:none;margin-bottom:12px;padding:10px 14px;background:var(--amber-bg);color:var(--amber);border-radius:8px;font-size:13px;align-items:center;justify-content:space-between;gap:10px;flex-wrap:wrap"></div>
       <!-- TAB -->
       <div style="display:flex;gap:8px;margin-bottom:16px">
         <button class="btn btn-primary" id="tab-keluar-manual" onclick="switchTab('keluar','manual')">✏ Input Manual</button>
@@ -540,6 +546,36 @@ input::placeholder{color:var(--text3)}
     </div>
 
     <!-- KELOLA USER (khusus Super Admin) -->
+    <!-- SURAT JALAN -->
+    <div class="page no-print" id="page-suratjalan">
+      <div class="gudang-info" id="gi-suratjalan"></div>
+      <div class="card">
+        <div class="card-title">Buat Surat Jalan <span style="font-size:12px;color:var(--text3);font-weight:400">pilih barang keluar yang dikirim bersamaan</span></div>
+        <div class="form-row">
+          <div class="fg"><label>Dari Tanggal</label><input type="date" id="sj-dari" onchange="renderSjPilih()"></div>
+          <div class="fg"><label>Sampai Tanggal</label><input type="date" id="sj-sampai" onchange="renderSjPilih()"></div>
+        </div>
+        <table>
+          <thead><tr><th style="width:34px"><input type="checkbox" id="sj-all" onchange="sjPilihSemua(this.checked)"></th><th>Tanggal</th><th>Barang</th><th>Qty</th><th>Tujuan</th><th>Keterangan</th></tr></thead>
+          <tbody id="tbl-sj-pilih"><tr><td colspan="6"><div class="loading"><div class="spinner"></div>Memuat...</div></td></tr></tbody>
+        </table>
+        <div style="font-size:12px;color:var(--text3);margin:10px 0" id="sj-info"></div>
+        <div class="form-row">
+          <div class="fg"><label>Kepada / Tujuan (dicetak di surat jalan)</label><input id="sj-tujuan" placeholder="Nama penerima"></div>
+          <div class="fg"><label>Project / Maintenance</label><input id="sj-project" placeholder="Contoh: Shell Veteran"></div>
+        </div>
+        <div style="margin-bottom:10px"><button class="btn btn-primary" id="btn-sj" onclick="buatSuratJalan()">⎙ Buat &amp; Cetak Surat Jalan</button></div>
+        <div style="font-size:12px;color:var(--text3)">Nomor dibuat otomatis (contoh: API/SJ/001/01/11/2026). Satu barang keluar hanya bisa masuk ke satu surat jalan.</div>
+      </div>
+      <div class="card">
+        <div class="card-title">Riwayat Surat Jalan <span style="font-size:12px;color:var(--text3);font-weight:400" id="sj-count"></span></div>
+        <table>
+          <thead><tr><th>No. Surat Jalan</th><th>Tanggal</th><th>Tujuan</th><th>Item</th><th>Dibuat oleh</th><th></th></tr></thead>
+          <tbody id="tbl-sj-riwayat"><tr><td colspan="6"><div class="loading"><div class="spinner"></div>Memuat...</div></td></tr></tbody>
+        </table>
+      </div>
+    </div>
+
     <div class="page no-print" id="page-user">
       <div class="card">
         <div class="card-title" id="u-form-title">Tambah User</div>
@@ -840,6 +876,23 @@ input::placeholder{color:var(--text3)}
 </div><!-- app -->
 
 <datalist id="dl-barang"></datalist>
+<div id="sj-modal" class="no-print" style="display:none;position:fixed;inset:0;background:rgba(26,25,22,.45);z-index:200;align-items:center;justify-content:center;padding:16px">
+  <div style="background:var(--surface);border-radius:12px;max-width:580px;width:100%;max-height:90vh;overflow:auto;padding:20px;box-shadow:0 20px 50px rgba(0,0,0,.25)">
+    <div style="font-size:16px;font-weight:600;margin-bottom:4px">Cetak Surat Jalan?</div>
+    <div style="font-size:12px;color:var(--text3);margin-bottom:12px" id="sjm-sub"></div>
+    <table><thead><tr><th>Barang</th><th>Qty</th><th>Keterangan</th></tr></thead><tbody id="sjm-items"></tbody></table>
+    <div style="font-size:12px;margin:10px 0" id="sjm-info"></div>
+    <div class="form-row">
+      <div class="fg"><label>Kepada / Tujuan</label><input id="sjm-tujuan" placeholder="Nama penerima" oninput="sjDraft.tujuan=this.value"></div>
+      <div class="fg"><label>Project / Maintenance</label><input id="sjm-project" placeholder="Contoh: Shell Veteran" oninput="sjDraft.project=this.value"></div>
+    </div>
+    <div style="display:flex;gap:8px;flex-wrap:wrap;margin-top:6px">
+      <button class="btn btn-primary" id="sjm-cetak" onclick="sjModalCetak()">⎙ Cetak Surat Jalan</button>
+      <button class="btn" onclick="sjModalTutup()">Tambah barang lain / nanti</button>
+    </div>
+    <div style="font-size:12px;color:var(--text3);margin-top:10px">Bila pengiriman terdiri dari beberapa barang, pilih "Tambah barang lain", simpan barang berikutnya, lalu cetak satu surat jalan untuk semuanya. Riwayat surat jalan ada di menu Surat Jalan.</div>
+  </div>
+</div>
 <div class="toast" id="toast"></div>
 
 <script>
@@ -904,9 +957,9 @@ function setConnected(ok){
 
 // ================= AUTH / LOGIN =================
 const ROLE_MENU = {
-  superadmin: ['dashboard','cari','masuk','keluar','stok','laporan','upload','return','user'],
-  supervisor: ['dashboard','cari','masuk','keluar','stok','laporan','upload','return'],
-  petugas:    ['dashboard','cari','masuk','keluar','stok','upload','return'],
+  superadmin: ['dashboard','cari','masuk','keluar','suratjalan','stok','laporan','upload','return','user'],
+  supervisor: ['dashboard','cari','masuk','keluar','suratjalan','stok','laporan','upload','return'],
+  petugas:    ['dashboard','cari','masuk','keluar','suratjalan','stok','upload','return'],
   finance:    ['dashboard','cari','laporan'],
 };
 const ROLE_LABEL = {
@@ -1102,6 +1155,7 @@ async function loadAll(retry=0){
   renderDashboard();
   renderStok();
   renderReturn();
+  sjMuatStatus();
 }
 
 function applyGudang(){
@@ -1109,7 +1163,7 @@ function applyGudang(){
   transaksi = storeAll[activeGudang].transaksi;
   returnData = storeAll[activeGudang].returnData;
   // Update gudang info banners
-  const pages = ['dashboard','masuk','keluar','stok','laporan','upload','return'];
+  const pages = ['dashboard','masuk','keluar','suratjalan','stok','laporan','upload','return'];
   const ico = activeGudang==='Shell'?'🏭':'🏢';
   const cls = activeGudang==='Shell'?'gi-shell':'gi-office';
   pages.forEach(p=>{
@@ -1133,6 +1187,9 @@ function switchGudang(nama){
   renderDashboard();
   renderStok();
   renderReturn();
+  const pSj=document.getElementById('page-suratjalan');
+  if(pSj&&pSj.classList.contains('active'))initSuratJalan();
+  sjUpdateBar();
   showToast('Beralih ke Gudang '+nama+' ✓');
 }
 
@@ -1157,12 +1214,13 @@ function goPage(id,el){
   document.querySelectorAll('.nav-item').forEach(n=>n.classList.remove('active'));
   document.getElementById('page-'+id).classList.add('active');
   if(el)el.classList.add('active');
-  const titles={dashboard:'Dashboard',cari:'Cari Barang',user:'Kelola User',masuk:'Barang Masuk',keluar:'Barang Keluar',stok:'Stok Opname',laporan:'Laporan Stok',upload:'Upload Excel',return:'Return Barang Rusak'};
+  const titles={dashboard:'Dashboard',cari:'Cari Barang',user:'Kelola User',masuk:'Barang Masuk',keluar:'Barang Keluar',suratjalan:'Surat Jalan',stok:'Stok Opname',laporan:'Laporan Stok',upload:'Upload Excel',return:'Return Barang Rusak'};
   document.getElementById('page-title').textContent=titles[id]||id;
   document.getElementById('page-date').textContent=new Date().toLocaleDateString('id-ID',{weekday:'long',day:'numeric',month:'long',year:'numeric'});
   if(id==='dashboard')renderDashboard();
   if(id==='stok')renderStok();
   if(id==='user')loadUsers();
+  if(id==='suratjalan')initSuratJalan();
   if(id==='cari'){renderCari();setTimeout(()=>document.getElementById('cari-input').focus(),50);}
   if(id==='laporan'){setDefaultDates();renderLapoStok();}
 }
@@ -1287,8 +1345,361 @@ async function simpanKeluar(){
     tbody.innerHTML+=`<tr><td><b>${nama}</b></td><td><span class="badge b-red">-${qty} ${satuan}</span></td><td>${tujuan||'-'}</td><td class="mono">${tr.jam}</td></tr>`;
     ['out-nama','out-kode','out-qty','out-tujuan','out-ref','out-ket'].forEach(id=>document.getElementById(id).value='');
     showToast('Barang keluar berhasil disimpan ✓');
+    sjAntrian[activeGudang].push(String(tr.id));sjUpdateBar();sjBukaModal();sjMuatStatus();
   }catch(e){showToast('Gagal menyimpan ke Sheets','err');}
   btn.disabled=false;btn.textContent='↑ Simpan Pengeluaran';
+}
+
+// ================= SURAT JALAN =================
+let sjList = [];                       // riwayat surat jalan gudang aktif
+let sjPilih = new Set();               // id transaksi keluar yang dicentang di menu Surat Jalan
+let sjKet = {};                        // keterangan per barang (id -> teks); awalnya No. SJK bila ada
+let sjAntrian = {Shell:[], Office:[]}; // barang keluar yang baru disimpan dan belum punya surat jalan
+let sjDraft = {tujuan:'', project:''}; // isian dialog yang dipertahankan selama menambah barang
+// Geser seluruh isi surat jalan ke bawah (mm). Naikkan, mis. 30, bila dicetak di kertas kop surat.
+const SJ_GESER_ATAS = 0;
+// Status "barang keluar tanpa surat jalan" dari server (peringatan keras, tidak memblokir).
+let sjStatus = {mulai:'', Shell:{total:0,terlambat:0,terlama:''}, Office:{total:0,terlambat:0,terlama:''}};
+
+async function sjMuatStatus(){
+  if(!(ROLE_MENU[getRole()]||[]).includes('suratjalan')) return;   // Finance tidak membuat surat jalan
+  try{
+    const res = await apiCall({action:'getTertunda'});
+    if(res && res.success){ sjStatus = res; sjRenderPeringatan(); }
+  }catch(e){ /* backend lama atau koneksi putus: abaikan, peringatan tidak ditampilkan */ }
+}
+
+function sjRenderPeringatan(){
+  const kosong = {total:0,terlambat:0,terlama:''};
+  const S = sjStatus.Shell || kosong, O = sjStatus.Office || kosong;
+  const total = S.total + O.total, telat = S.terlambat + O.terlambat;
+  const terlama = [S.terlama, O.terlama].filter(Boolean).sort()[0] || '';
+  const badge = document.getElementById('sj-badge');
+  if(badge){
+    badge.style.display = total ? 'inline-block' : 'none';
+    badge.textContent = total;
+    badge.style.background = telat ? 'var(--red)' : 'var(--amber)';
+    badge.title = total + ' barang keluar belum memiliki surat jalan';
+  }
+  let html = '';
+  if(total){
+    const rinci = [];
+    if(S.total) rinci.push('Shell: '+S.total);
+    if(O.total) rinci.push('Office: '+O.total);
+    html = '<span>'+(telat?'⚠ ':'⎙ ')+'<b>'+total+' barang keluar belum memiliki surat jalan</b> ('+rinci.join(', ')+')'
+      + (telat ? ' — '+telat+' di antaranya dari hari sebelumnya, terlama '+fmtDate(terlama) : ' — dari hari ini, segera cetak')
+      + '</span>'
+      + `<button class="btn btn-sm" onclick="goPage('suratjalan',document.querySelector('.nav-item[data-page=suratjalan]'))">⎙ Buat Surat Jalan</button>`;
+  }
+  ['sj-warn-dash','sj-warn-keluar'].forEach(id => {
+    const el = document.getElementById(id);
+    if(!el) return;
+    if(!html){ el.style.display = 'none'; return; }
+    el.style.display = 'flex';
+    el.style.background = telat ? 'var(--red-bg)' : 'var(--amber-bg)';
+    el.style.color = telat ? 'var(--red)' : 'var(--amber)';
+    el.innerHTML = html;
+  });
+}
+
+function sjIdTerpakai(){
+  const s = new Set();
+  sjList.forEach(x => (x.items||[]).forEach(it => s.add(String(it.id))));
+  return s;
+}
+
+function tglPanjang(iso){
+  const d = new Date(String(iso).slice(0,10) + 'T00:00:00');
+  if(isNaN(d.getTime())) return String(iso||'-');
+  return d.toLocaleDateString('id-ID',{day:'2-digit',month:'long',year:'numeric'});
+}
+
+function hariTanggal(iso){
+  const d = new Date(String(iso).slice(0,10) + 'T00:00:00');
+  if(isNaN(d.getTime())) return String(iso||'-');
+  return d.toLocaleDateString('id-ID',{weekday:'long'}) + ' / ' + tglPanjang(iso);
+}
+
+// ---- Menu Surat Jalan: pilih barang keluar + riwayat ----
+async function initSuratJalan(){
+  const dari = document.getElementById('sj-dari');
+  if(!dari.value){
+    const d = new Date(); d.setDate(d.getDate()-7);
+    const tujuhHari = d.getFullYear()+'-'+String(d.getMonth()+1).padStart(2,'0')+'-'+String(d.getDate()).padStart(2,'0');
+    // tampilkan sejak aturan mulai berlaku bila lebih lama dari 7 hari, agar yang tertunda tidak tersembunyi
+    dari.value = (sjStatus.mulai && sjStatus.mulai < tujuhHari) ? sjStatus.mulai : tujuhHari;
+    document.getElementById('sj-sampai').value = isoToday();
+  }
+  sjPilih.clear();
+  sjKet = {};
+  document.getElementById('sj-tujuan').value = '';
+  document.getElementById('sj-project').value = '';
+  await loadSuratJalan();
+}
+
+async function loadSuratJalan(){
+  const tbP = document.getElementById('tbl-sj-pilih');
+  const tbR = document.getElementById('tbl-sj-riwayat');
+  tbP.innerHTML = tbR.innerHTML = '<tr><td colspan="6"><div class="loading"><div class="spinner"></div>Memuat...</div></td></tr>';
+  try{
+    const res = await apiCall({action:'getSuratJalan', gudang:activeGudang});
+    if(!res || !res.success){
+      const pesan = escHtml((res&&(res.error||res.message))||'Gagal memuat surat jalan');
+      tbP.innerHTML = tbR.innerHTML = '<tr><td colspan="6" style="color:var(--red);font-size:12px">'+pesan+(String(pesan).indexOf('Action tidak dikenal')>=0?' (backend belum diperbarui ke v4.5)':'')+'</td></tr>';
+      return;
+    }
+    sjList = res.data || [];
+    renderSjRiwayat();
+    renderSjPilih();
+  }catch(e){
+    tbP.innerHTML = tbR.innerHTML = '<tr><td colspan="6" style="color:var(--red);font-size:12px">Gagal memuat data. Coba buka menu ini lagi.</td></tr>';
+  }
+}
+
+function sjKandidat(){
+  const dari = document.getElementById('sj-dari').value || '0000-00-00';
+  const sampai = document.getElementById('sj-sampai').value || '9999-99-99';
+  const terpakai = sjIdTerpakai();
+  return transaksi.filter(t => t.jenis==='keluar' && t.tanggal>=dari && t.tanggal<=sampai && !terpakai.has(String(t.id))).slice().reverse();
+}
+
+function renderSjPilih(){
+  const tb = document.getElementById('tbl-sj-pilih');
+  const rows = sjKandidat();
+  const ada = new Set(rows.map(t=>String(t.id)));
+  sjPilih.forEach(id => { if(!ada.has(id)) sjPilih.delete(id); });
+  if(!rows.length){
+    tb.innerHTML = '<tr><td colspan="6" style="color:var(--text3);font-size:12px">Semua barang keluar pada rentang tanggal ini sudah memiliki surat jalan</td></tr>';
+  } else {
+    const hariIni = isoToday();
+    tb.innerHTML = rows.map(t => {
+      const telat = !!sjStatus.mulai && t.tanggal < hariIni && t.tanggal >= sjStatus.mulai;   // terlambat: dari hari sebelumnya
+      return `<tr${telat?' style="background:var(--red-bg)"':''}>
+      <td><input type="checkbox" data-id="${escAttr(String(t.id))}" ${sjPilih.has(String(t.id))?'checked':''} onchange="sjToggle(this.dataset.id,this.checked)"></td>
+      <td class="mono" style="font-size:12px">${fmtDate(t.tanggal)}${telat?' <span class="badge b-red" style="font-size:10px">Terlambat</span>':''}</td>
+      <td style="font-weight:500">${escHtml(t.nama)}</td>
+      <td><span class="badge b-red">-${escHtml(String(t.qty))} ${escHtml(t.satuan)}</span></td>
+      <td>${escHtml(t.pihak||'-')}</td>
+      <td><input data-id="${escAttr(String(t.id))}" value="${escAttr(sjKet[String(t.id)]!==undefined ? sjKet[String(t.id)] : (t.ref||''))}" placeholder="-" maxlength="100" style="min-width:120px" oninput="sjKet[this.dataset.id]=this.value"></td>
+    </tr>`;
+    }).join('');
+  }
+  document.getElementById('sj-all').checked = rows.length>0 && sjPilih.size===rows.length;
+  sjUpdateInfo();
+}
+
+function sjToggle(id, on){
+  if(on) sjPilih.add(String(id)); else sjPilih.delete(String(id));
+  const rows = sjKandidat();
+  document.getElementById('sj-all').checked = rows.length>0 && sjPilih.size===rows.length;
+  sjUpdateInfo();
+}
+
+function sjPilihSemua(on){
+  sjPilih.clear();
+  if(on) sjKandidat().forEach(t => sjPilih.add(String(t.id)));
+  renderSjPilih();
+}
+
+function sjUpdateInfo(){
+  const info = document.getElementById('sj-info');
+  const dipilih = transaksi.filter(t => sjPilih.has(String(t.id)));
+  const tujuan = [...new Set(dipilih.map(t => String(t.pihak||'').trim()).filter(Boolean))];
+  let teks = dipilih.length + ' barang dipilih';
+  if(tujuan.length===1){
+    document.getElementById('sj-tujuan').value = tujuan[0];
+  } else if(tujuan.length>1){
+    teks += ' — peringatan: tujuan berbeda-beda ('+tujuan.join(', ')+'), isi tujuan yang akan dicetak';
+  }
+  info.textContent = teks;
+  info.style.color = tujuan.length>1 ? 'var(--amber)' : 'var(--text3)';
+}
+
+// ---- inti: minta nomor ke server, simpan, lalu cetak PDF ----
+async function kirimSuratJalan(ids, tujuan, project){
+  const ket = {};
+  ids.forEach(id => {
+    const t = transaksi.find(x => String(x.id)===id) || {};
+    ket[id] = String(sjKet[id]!==undefined ? sjKet[id] : (t.ref||'')).trim();
+  });
+  try{
+    const res = await apiCall({action:'createSuratJalan', data:JSON.stringify({ids, tujuan, project, ket, gudang:activeGudang})});
+    if(!res || !res.success){ showToast((res&&(res.error||res.message))||'Gagal membuat surat jalan','err'); return null; }
+    sjList.unshift(res.suratJalan);
+    ids.forEach(id => { delete sjKet[id]; });
+    sjAntrian[activeGudang] = sjAntrian[activeGudang].filter(id => ids.indexOf(id)<0);
+    sjUpdateBar();
+    sjMuatStatus();
+    cetakSuratJalan(res.suratJalan);
+    showToast('Surat jalan '+res.suratJalan.nomor+' dibuat ✓');
+    return res.suratJalan;
+  }catch(e){
+    if(String(e&&e.message)!=='unauthorized' && String(e&&e.message)!=='forbidden') showToast('Gagal terhubung ke server','err');
+    return null;
+  }
+}
+
+async function buatSuratJalan(){
+  if(!sjPilih.size){ showToast('Pilih minimal satu barang keluar','warn'); return; }
+  const tujuan = document.getElementById('sj-tujuan').value.trim();
+  if(!tujuan){ showToast('Isi tujuan / penerima','warn'); return; }
+  const project = document.getElementById('sj-project').value.trim();
+  const btn = document.getElementById('btn-sj');
+  btn.disabled = true; btn.textContent = 'Membuat...';
+  try{
+    const sj = await kirimSuratJalan([...sjPilih], tujuan, project);
+    if(sj){
+      sjPilih.clear();
+      document.getElementById('sj-tujuan').value = '';
+      document.getElementById('sj-project').value = '';
+      renderSjRiwayat();
+      renderSjPilih();
+    }
+  }finally{
+    btn.disabled = false; btn.innerHTML = '⎙ Buat &amp; Cetak Surat Jalan';
+  }
+}
+
+function renderSjRiwayat(){
+  const tb = document.getElementById('tbl-sj-riwayat');
+  document.getElementById('sj-count').textContent = sjList.length + ' dokumen';
+  if(!sjList.length){ tb.innerHTML = '<tr><td colspan="6" style="color:var(--text3);font-size:12px">Belum ada surat jalan</td></tr>'; return; }
+  tb.innerHTML = sjList.map(s => `<tr>
+    <td class="mono" style="font-size:12px;font-weight:600">${escHtml(s.nomor)}</td>
+    <td>${fmtDate(s.tanggal)}</td>
+    <td>${escHtml(s.tujuan)}${s.project?'<div style="font-size:11px;color:var(--text3)">'+escHtml(s.project)+'</div>':''}</td>
+    <td>${(s.items||[]).length} barang</td>
+    <td>${escHtml(s.dibuatOleh||'-')}</td>
+    <td style="text-align:right"><button class="btn btn-sm" data-n="${escAttr(s.nomor)}" onclick="cetakUlangSj(this.dataset.n)">⎙ Cetak</button></td>
+  </tr>`).join('');
+}
+
+function cetakUlangSj(nomor){
+  const s = sjList.find(x => x.nomor===nomor);
+  if(s) cetakSuratJalan(s);
+}
+
+// ---- Setelah Simpan Barang Keluar: tawarkan cetak surat jalan ----
+function sjUpdateBar(){
+  const bar = document.getElementById('sj-antrian-bar');
+  if(!bar) return;
+  const n = sjAntrian[activeGudang].length;
+  if(!n){ bar.style.display = 'none'; return; }
+  bar.style.display = 'flex';
+  bar.innerHTML = '<span>⎙ <b>'+n+' barang keluar</b> menunggu surat jalan</span>'
+    + '<button class="btn btn-sm" onclick="sjBukaModal()">⎙ Cetak Surat Jalan</button>';
+}
+
+function sjBukaModal(){
+  const ids = sjAntrian[activeGudang];
+  const items = ids.map(id => transaksi.find(t => String(t.id)===id)).filter(Boolean);
+  if(!items.length) return;
+  document.getElementById('sjm-sub').textContent =
+    items.length+' barang keluar (Gudang '+activeGudang+') belum memiliki surat jalan. Setiap barang keluar perlu surat jalan.';
+  document.getElementById('sjm-items').innerHTML = items.map(t => `<tr>
+    <td style="font-weight:500">${escHtml(t.nama)}</td>
+    <td><span class="badge b-red">-${escHtml(String(t.qty))} ${escHtml(t.satuan)}</span></td>
+    <td><input data-id="${escAttr(String(t.id))}" value="${escAttr(sjKet[String(t.id)]!==undefined ? sjKet[String(t.id)] : (t.ref||''))}" placeholder="Keterangan (opsional)" maxlength="100" oninput="sjKet[this.dataset.id]=this.value"></td>
+  </tr>`).join('');
+  const tujuan = [...new Set(items.map(t => String(t.pihak||'').trim()).filter(Boolean))];
+  document.getElementById('sjm-tujuan').value = sjDraft.tujuan || (tujuan.length===1 ? tujuan[0] : '');
+  document.getElementById('sjm-project').value = sjDraft.project || '';
+  const info = document.getElementById('sjm-info');
+  info.textContent = tujuan.length>1 ? 'Peringatan: tujuan barang berbeda-beda ('+tujuan.join(', ')+'). Isi tujuan yang akan dicetak.' : '';
+  info.style.color = 'var(--amber)';
+  document.getElementById('sj-modal').style.display = 'flex';
+}
+
+function sjModalTutup(){
+  document.getElementById('sj-modal').style.display = 'none';
+}
+
+async function sjModalCetak(){
+  const ids = sjAntrian[activeGudang].slice();
+  if(!ids.length){ sjModalTutup(); return; }
+  const tujuan = document.getElementById('sjm-tujuan').value.trim();
+  if(!tujuan){ showToast('Isi tujuan / penerima','warn'); return; }
+  const project = document.getElementById('sjm-project').value.trim();
+  const btn = document.getElementById('sjm-cetak');
+  btn.disabled = true; btn.textContent = 'Membuat...';
+  const sj = await kirimSuratJalan(ids, tujuan, project);
+  btn.disabled = false; btn.innerHTML = '⎙ Cetak Surat Jalan';
+  if(sj){
+    sjDraft = {tujuan:'', project:''};
+    sjModalTutup();
+    const p = document.getElementById('page-suratjalan');
+    if(p && p.classList.contains('active')){ renderSjRiwayat(); renderSjPilih(); }
+  }
+}
+
+
+function cetakSuratJalan(sj){
+  const {jsPDF} = window.jspdf;
+  const doc = new jsPDF({ orientation:'portrait', unit:'mm', format:'a4' });
+  const W = 210, M = 14, G = SJ_GESER_ATAS;
+
+  // Garis atas (tanpa kop: bagian atas dibiarkan kosong untuk logo / kertas kop)
+  doc.setDrawColor(26,26,22); doc.setLineWidth(1); doc.line(M, 8+G, W-M, 8+G);
+
+  // Judul + nomor
+  doc.setFont('helvetica','bold'); doc.setFontSize(16);
+  doc.text('SURAT JALAN', W/2, 18+G, {align:'center'});
+  doc.setFontSize(10);
+  doc.text('No: '+sj.nomor, W/2, 24+G, {align:'center'});
+
+  // Info (dua kolom)
+  doc.setFont('helvetica','normal'); doc.setFontSize(10);
+  const muat = (t, maks) => {
+    t = String(t==null ? '' : t);
+    if(doc.getTextWidth(t) <= maks) return t;
+    while(t.length > 1 && doc.getTextWidth(t+'...') > maks) t = t.slice(0,-1);
+    return t+'...';
+  };
+  doc.text('Kepada / Tujuan', M, 35+G);        doc.text(': '+muat(sj.tujuan, 66), M+41, 35+G);
+  doc.text('Project / Maintenance', M, 41+G);  doc.text(': '+muat(sj.project||'-', 66), M+41, 41+G);
+  doc.text('Hari/Tanggal', 130, 35+G);         doc.text(': '+hariTanggal(sj.tanggal), 154, 35+G);
+  doc.text('Jam', 130, 41+G);                  doc.text(': '+String(sj.jam||'-').replace(':','.'), 154, 41+G);
+
+  // Tabel barang
+  const body = (sj.items||[]).map((it,i) => [i+1, it.kode||'-', it.nama, it.qty, it.satuan, it.ket||'-']);
+  doc.autoTable({
+    startY: 47+G,
+    head: [['No','Kode','Nama Barang','Jumlah','Satuan','Keterangan']],
+    body: body,
+    styles: { fontSize: 9, cellPadding: 2.4 },
+    headStyles: { fillColor: [26,26,22], textColor: 255, fontStyle:'bold' },
+    alternateRowStyles: { fillColor: [247,246,243] },
+    columnStyles: {
+      0:{halign:'center', cellWidth:12}, 1:{cellWidth:38.5}, 2:{cellWidth:51},
+      3:{halign:'center', cellWidth:28.5}, 4:{cellWidth:23}, 5:{cellWidth:29}
+    },
+    margin: { left: M, right: M }
+  });
+
+  let y = doc.lastAutoTable.finalY + 6;
+  doc.setFontSize(9); doc.setTextColor(110);
+  doc.text('Total: '+body.length+' jenis barang. Barang telah diterima dalam keadaan baik dan jumlah sesuai.', M, y);
+  doc.setTextColor(0);
+
+  // Tanda tangan
+  if(y + 55 > 280){ doc.addPage(); y = 20; }
+  y += 14;
+  const label = ['Petugas Gudang','Mengetahui','Diterima'];
+  const lebar = (W - 2*M) / 3;
+  doc.setFontSize(10);
+  label.forEach((t,i) => {
+    const cx = M + lebar*i + lebar/2;
+    doc.setFont('helvetica','normal');
+    doc.text(t, cx, y, {align:'center'});
+    doc.text('( ............................ )', cx, y+30, {align:'center'});
+  });
+
+  // Pencetak
+  doc.setFontSize(7); doc.setTextColor(140);
+  const pencetak = (localStorage.getItem('gudang_nama')||'-');
+  doc.text('Dicetak oleh '+pencetak+' pada '+new Date().toLocaleString('id-ID'), M, 290);
+
+  doc.save('Surat_Jalan_'+sj.nomor.replace(/\//g,'-')+'.pdf');
 }
 
 // ---- STOK ----
